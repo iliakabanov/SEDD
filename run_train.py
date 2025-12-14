@@ -51,7 +51,8 @@ def run_multiprocess(rank, world_size, cfg, port):
 
 def _run(rank, world_size, cfg):
     torch.cuda.set_device(rank)
-    work_dir = cfg.work_dir
+    # Ensure `work_dir` exists in the config; fallback to a local directory
+    work_dir = cfg.work_dir if "work_dir" in cfg else os.path.join(os.getcwd(), "work_dir")
 
     # Create directories for experimental logs
     sample_dir = os.path.join(work_dir, "samples")
