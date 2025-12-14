@@ -40,19 +40,16 @@ def cleanup():
 
 
 def run_multiprocess(rank, world_size, cfg, port):
-    if world_size > 1:
-        setup(rank, world_size, port)
     try:
+        setup(rank, world_size, port)
         _run(rank, world_size, cfg)
     finally:
-        if world_size > 1:
-            cleanup()
+        cleanup()
 
 
 def _run(rank, world_size, cfg):
     torch.cuda.set_device(rank)
-    # Ensure `work_dir` exists in the config; fallback to a local directory
-    work_dir = cfg.work_dir if "work_dir" in cfg else os.path.join(os.getcwd(), "work_dir")
+    work_dir = cfg.work_dir
 
     # Create directories for experimental logs
     sample_dir = os.path.join(work_dir, "samples")
@@ -224,22 +221,3 @@ def _run(rank, world_size, cfg):
                             del eval_model, logits, loss
 
                     dist.barrier()
-
-
-import hydra
-from omegaconf import OmegaConf
-
-@hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(cfg):
-    # Kaggle: один процесс, одна GPU
-    world_size = 1
-    port = 29500  # любой свободный порт
-
-    # Чтобы увидеть, что модель реально в конфиге появилась:
-    assert "model" in cfg, f"Hydra не скомпозила model. Keys: {list(cfg.keys())}"
-
-    run_multiprocess(0, world_size, cfg, port)
-
-if __name__ == "__main__":
-    main()
-

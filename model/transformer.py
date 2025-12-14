@@ -5,16 +5,7 @@ import numpy as np
 import math
 
 from einops import rearrange
-import torch
-import torch.nn.functional as F
-
-try:
-    from flash_attn.flash_attn_interface import flash_attn_varlen_qkvpacked_func
-    _HAS_FLASH_ATTN = True
-except Exception:
-    flash_attn_varlen_qkvpacked_func = None
-    _HAS_FLASH_ATTN = False
-
+from flash_attn.flash_attn_interface import flash_attn_varlen_qkvpacked_func
 # from flash_attn.ops.fused_dense import FusedMLP, FusedDense
 from huggingface_hub import PyTorchModelHubMixin
 from omegaconf import OmegaConf
@@ -171,26 +162,25 @@ class DDiTBlock(nn.Module):
         x = modulate_fused(self.norm1(x), shift_msa, scale_msa)
         # dtype0 = x.dtype
 
-        if _HAS_FLASH_ATTN:
-            x = flash_attn_varlen_qkvpacked_func(qkv, cu_seqlens, seq_len, 0., causal=False)
+        qkv = self.attn_qkv(x)
+        qkv = rearrange(qkv, 'b s (three h d) -> b s three h d', three=3, h=self.n_heads)
+        with torch.cuda.amp.autocast(enabled=False):
+            cos, sin = rotary_cos_sin
+            qkv = rotary.apply_rotary_pos_emb(
+                qkv, cos.to(qkv.dtype), sin.to(qkv.dtype)
+            )
+        qkv = rearrange(qkv, 'b s ... -> (b s) ...')
+        if seqlens is None:
+            cu_seqlens = torch.arange(
+                0, (batch_size + 1) * seq_len, step=seq_len,
+                dtype=torch.int32, device=qkv.device
+            )
         else:
-            # Fallback без flash-attn (фиксированная длина seq_len)
-            # qkv сейчас: (B*S, 3, H, D) после qkv = rearrange(..., '(b s) ...')
-            qkv_ = qkv.view(batch_size, seq_len, 3, self.n_heads, -1)  # (B,S,3,H,D)
-
-            q = qkv_[:, :, 0].transpose(1, 2)  # (B,H,S,D)
-            k = qkv_[:, :, 1].transpose(1, 2)
-            v = qkv_[:, :, 2].transpose(1, 2)
-
-            out = F.scaled_dot_product_attention(
-                q, k, v,
-                attn_mask=None,
-                dropout_p=0.0,
-                is_causal=False
-            )  # (B,H,S,D)
-
-            # вернуть в формат, который ожидает следующий rearrange: (B*S, H, D)
-            x = out.transpose(1, 2).contiguous().view(batch_size * seq_len, self.n_heads, -1)
+            cu_seqlens = seqlens.cumsum(-1)
+        x = flash_attn_varlen_qkvpacked_func(
+            qkv, cu_seqlens, seq_len, 0., causal=False)
+        
+        x = rearrange(x, '(b s) h d -> b s (h d)', b=batch_size)
 
         x = bias_dropout_scale_fn(self.attn_out(x), None, gate_msa, x_skip, self.dropout)
 
