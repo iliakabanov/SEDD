@@ -225,21 +225,3 @@ def _run(rank, world_size, cfg):
 
                     dist.barrier()
 
-
-import hydra
-from omegaconf import OmegaConf
-
-@hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(cfg):
-    # Kaggle: один процесс, одна GPU
-    world_size = 1
-    port = 29500  # любой свободный порт
-
-    # Чтобы увидеть, что модель реально в конфиге появилась:
-    assert "model" in cfg, f"Hydra не скомпозила model. Keys: {list(cfg.keys())}"
-
-    run_multiprocess(0, world_size, cfg, port)
-
-if __name__ == "__main__":
-    main()
-
