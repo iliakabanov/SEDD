@@ -1,6 +1,13 @@
 import torch
 from torch import nn
 
+try:
+    import flash_attn.layers.rotary as flash_rotary
+    _HAS_FLASH_ROTARY = True
+except Exception:
+    flash_rotary = None
+    _HAS_FLASH_ROTARY = False
+
 
 class Rotary(torch.nn.Module):
     def __init__(self, dim, base=10_000):
@@ -41,12 +48,9 @@ def _apply_rotary_pos_emb_torchscript(qkv, cos, sin):
 
 
 def apply_rotary_pos_emb(qkv, cos, sin):
-    try:
-        import flash_attn.layers.rotary
-        cos = cos[0,:,0,0,:cos.shape[-1]//2]
-        sin = sin[0,:,0,0,:sin.shape[-1]//2]
-        return flash_attn.layers.rotary.apply_rotary_emb_qkv_(
-            qkv, cos, sin
-        )
-    except:
+    if _HAS_FLASH_ROTARY and flash_rotary is not None:
+        cos_short = cos[0, :, 0, 0, : cos.shape[-1] // 2]
+        sin_short = sin[0, :, 0, 0, : sin.shape[-1] // 2]
+        return flash_rotary.apply_rotary_emb_qkv_(qkv, cos_short, sin_short)
+    else:
         return _apply_rotary_pos_emb_torchscript(qkv, cos, sin)
