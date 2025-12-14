@@ -40,11 +40,13 @@ def cleanup():
 
 
 def run_multiprocess(rank, world_size, cfg, port):
-    try:
+    if world_size > 1:
         setup(rank, world_size, port)
+    try:
         _run(rank, world_size, cfg)
     finally:
-        cleanup()
+        if world_size > 1:
+            cleanup()
 
 
 def _run(rank, world_size, cfg):
@@ -221,3 +223,18 @@ def _run(rank, world_size, cfg):
                             del eval_model, logits, loss
 
                     dist.barrier()
+
+
+if __name__ == "__main__":
+    import sys
+    from omegaconf import OmegaConf
+    
+    # Load config
+    cfg = OmegaConf.load("configs/config.yaml")
+    
+    # Force world_size to 1 (single process, no distributed training)
+    world_size = 1
+    port = 6000
+    
+    # Run directly without spawn
+    run_multiprocess(0, world_size, cfg, port)
