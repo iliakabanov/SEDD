@@ -19,7 +19,6 @@ docker-pycreds==0.4.0
 einops==0.7.0
 fancy-einsum==0.0.3
 filelock==3.9.0
-flash-attn==2.2.2
 frozenlist==1.4.1
 fsspec==2023.10.0
 gitdb==4.0.11
@@ -77,14 +76,3 @@ urllib3==1.26.13
 wandb==0.16.3
 xxhash==3.4.1
 yarl==1.9.4
-
-# Converted from environment.yml (conda deps -> pip-style where possible)
-gds-tools==1.4.0.31
-ld_impl_linux-64==2.38
-ncurses==6.4
-nsight-compute==2022.3.0.22
-readline==8.2
-sqlite==3.41.2
-tk==8.6.12
-xz==5.4.6
-zlib==1.2.13
